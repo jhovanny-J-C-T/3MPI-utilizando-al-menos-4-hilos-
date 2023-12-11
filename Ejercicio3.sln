@@ -11,42 +11,46 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    char frase[] = "tres tristes tigres trigaban trigo por culpa del bolivar";
+    char frase[] = "tres tristes tigres trigaban trigo por culpa del bolivar e";
     int longitud = strlen(frase);
     int inicio = rank * longitud / size;
     int fin = (rank + 1) * longitud / size;
 
-    char parte_local[1000] = "";  // Asegurar espacio suficiente para el segmento local
+    char parte_local[100] = "";
     bool intercambiar = true;
 
-    #pragma omp parallel for shared(parte_local) private(intercambiar)
-    for (int i = inicio; i < fin; ++i) {
-        if (frase[i] == ' ' || frase[i] == '\0') {
-            frase[i] = '\0';
-            if (intercambiar) {
+    #pragma omp parallel num_threads(4) shared(parte_local) private(intercambiar)
+    {
+        #pragma omp for
+        for (int i = inicio; i < fin; ++i) {
+            if (frase[i] == ' ' || frase[i] == '\0') {
+                frase[i] = '\0';
                 #pragma omp critical
                 {
-                    snprintf(parte_local + strlen(parte_local), sizeof(parte_local) - strlen(parte_local), "%s ", &frase[inicio]);
+                    if (intercambiar) {
+                        strcat(parte_local, &frase[inicio]);
+                        strcat(parte_local, " ");
+                    } else {
+                        strcat(parte_local, &frase[inicio]);
+                        strcat(parte_local, " ");
+                    }
                 }
+                inicio = i + 1;
+                intercambiar = !intercambiar;
             }
-            else {
-                    #pragma omp critical
-                     {
-                    snprintf(parte_local + strlen(parte_local), sizeof(parte_local) - strlen(parte_local), "%s ", &frase[inicio]);
-                     }
-            }
-            inicio = i + 1;
-            intercambiar = !intercambiar;
         }
     }
 
-    char resultado[1000 * size];
-    MPI_Gather(parte_local, 1000, MPI_CHAR, resultado, 1000, MPI_CHAR, 0, MPI_COMM_WORLD);
+    char resultado[100 * size];
+    MPI_Gather(parte_local, 100, MPI_CHAR, resultado, 100, MPI_CHAR, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        printf("Resultado: %s\n", resultado);
+        printf("Resultado:\n");
+        for (int i = 0; i < size; ++i) {
+            printf("Parte %d: %s\n", i + 1, &resultado[i * 100]);
+        }
     }
 
     MPI_Finalize();
-    return 0;
+    return 0;
 }
